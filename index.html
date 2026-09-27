@@ -119,9 +119,34 @@ svg{display:block;width:100%;min-width:840px;height:auto}
 .transition-side .cap{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
 .transition-side .main{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:20px;font-weight:800;letter-spacing:.04em}
 .transition-side .sub{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--accent);margin-top:3px}
-.transition-arrow{font-size:28px;color:var(--accent);font-weight:800;text-align:center}
+.transition-arrow{font-size:34px;color:var(--accent);font-weight:900;text-align:center;line-height:1}
 .transition-meta{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
 .pill{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:4px 8px;border-radius:999px;background:var(--panel2)}
+.flow-col{min-width:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.flow-label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:800;color:var(--muted);text-align:center}
+.flow-note{font-size:10px;color:var(--muted);text-align:center;max-width:112px;line-height:1.3}
+.flow-line{width:100%;height:2px;border-radius:999px;background:var(--border);position:relative}
+.flow-line:after{content:"";position:absolute;right:-1px;top:50%;width:9px;height:9px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:translateY(-50%) rotate(45deg)}
+.flow-cycle .flow-line,.flow-cycle .transition-arrow{color:var(--good);background:var(--good)}
+.flow-enter .flow-line,.flow-enter .transition-arrow{color:var(--accent2);background:var(--accent2)}
+.flow-transient .flow-line,.flow-transient .transition-arrow{color:var(--accent);background:var(--accent)}
+.flow-self .transition-arrow{color:var(--good);font-size:40px}
+.cycle-overview{margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:var(--panel2);padding:14px}
+.cycle-overview-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.cycle-overview-title{font-weight:800}
+.cycle-overview-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.cycle-rail-card{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:11px;margin-top:9px}
+.cycle-rail-title{font-size:12px;font-weight:800;margin-bottom:9px}
+.cycle-rail-scroll{overflow-x:auto;padding-bottom:3px}
+.cycle-rail{display:flex;align-items:center;gap:7px;min-width:max-content}
+.cycle-node{border:1px solid var(--good);border-radius:12px;background:var(--card);padding:8px 10px;min-width:92px;text-align:center;cursor:pointer}
+.cycle-node:hover{border-color:var(--accent)}
+.cycle-node .cs{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800;font-size:14px}
+.cycle-node .cr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent);font-size:10px;margin-top:3px}
+.cycle-arrow{color:var(--good);font-size:22px;font-weight:900}
+.cycle-return{display:flex;align-items:center;gap:5px;color:var(--good);font-size:11px;font-weight:800;white-space:nowrap}
+.list-legend{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 12px;color:var(--muted);font-size:11px}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
 .inspector{
   background:var(--panel2);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px
 }
@@ -175,7 +200,9 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   .cell-grid{grid-template-columns:1fr}
   .sim-row{grid-template-columns:1fr 1fr}
   .transition-item{grid-template-columns:1fr;gap:8px}
-  .transition-arrow{transform:rotate(90deg)}
+  .flow-col{min-width:0;width:100%}
+  .flow-line{width:64%;transform:rotate(90deg);margin:14px 0}
+  .transition-arrow{transform:none}
   h1{font-size:38px}
 }
 </style>
@@ -253,6 +280,12 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
         </div>
       </div>
       <div id="listView" class="hidden-view">
+        <div id="cycleOverview" class="cycle-overview"></div>
+        <div class="list-legend">
+          <span><i class="status-dot" style="background:var(--good)"></i>Cycle step</span>
+          <span><i class="status-dot" style="background:var(--accent2)"></i>Enters attractor</span>
+          <span><i class="status-dot" style="background:var(--accent)"></i>Transient transition</span>
+        </div>
         <div class="transition-list-wrap">
           <div id="transitionList" class="transition-list"></div>
         </div>
@@ -487,36 +520,148 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
     });
   }
 
+  function buildCycleMembership(){
+    const membership = new Map();
+    model.cycles.forEach((cycle, cycleIndex)=>{
+      cycle.forEach((state, position)=>{
+        membership.set(state,{cycleIndex,position,length:cycle.length});
+      });
+    });
+    return membership;
+  }
+
+  function attractorInfo(state){
+    const membership = buildCycleMembership();
+    if(membership.has(state)){
+      return {...membership.get(state),steps:0};
+    }
+    let cur = state;
+    let steps = 0;
+    const seen = new Set();
+    while(!membership.has(cur) && !seen.has(cur) && steps <= model.rows.length + 1){
+      seen.add(cur);
+      cur = model.byState.get(cur).next;
+      steps++;
+    }
+    const m = membership.get(cur);
+    return m ? {...m,steps} : {cycleIndex:-1,position:-1,length:0,steps};
+  }
+
+  function renderCycleOverview(){
+    const box = $('cycleOverview');
+    if(!model.cycles.length){
+      box.innerHTML = '<div class="cycle-overview-title">No attractor cycles found</div>';
+      return;
+    }
+    box.innerHTML = `<div class="cycle-overview-head">
+      <div>
+        <div class="cycle-overview-title">Attractor cycle map</div>
+        <div class="cycle-overview-sub">Follow the green arrows; the final return arrow closes the loop back to the first state.</div>
+      </div>
+    </div>` + model.cycles.map((cycle,ci)=>{
+      const nodes = cycle.map((state,idx)=>{
+        const row = model.byState.get(state);
+        const arrow = idx < cycle.length - 1 ? '<span class="cycle-arrow">→</span>' : '';
+        return `<button type="button" class="cycle-node" data-state="${state}" title="Inspect ${state}">
+          <div class="cs">${state}</div>
+          <div class="cr">RMT ${row.rmtText}</div>
+        </button>${arrow}`;
+      }).join('');
+      const first = cycle[0];
+      return `<div class="cycle-rail-card">
+        <div class="cycle-rail-title">Cycle ${ci+1} · length ${cycle.length}</div>
+        <div class="cycle-rail-scroll">
+          <div class="cycle-rail">
+            ${nodes}
+            <span class="cycle-return">↩ back to ${first}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    box.querySelectorAll('.cycle-node[data-state]').forEach(btn=>{
+      btn.addEventListener('click',()=>selectState(btn.dataset.state));
+    });
+  }
+
   function renderTransitionList(){
     const container = $('transitionList');
-    const cycleNodes = cycleSet();
+    const membership = buildCycleMembership();
+
     container.innerHTML = model.rows.map(r => {
-      const inCycle = cycleNodes.has(r.state);
-      const feedsCycle = cycleNodes.has(r.next);
+      const currentCycle = membership.get(r.state);
+      const nextCycle = membership.get(r.next);
+      const info = attractorInfo(r.state);
+
+      let kind = 'transient';
+      let label = 'transition';
+      let note = '';
+      let arrow = '→';
+
+      if(r.state === r.next){
+        kind = 'self';
+        label = 'self-loop';
+        note = `Cycle ${(currentCycle?.cycleIndex ?? 0)+1}`;
+        arrow = '↻';
+      } else if(currentCycle && nextCycle && currentCycle.cycleIndex === nextCycle.cycleIndex){
+        kind = 'cycle';
+        label = 'cycle step';
+        note = `Cycle ${currentCycle.cycleIndex+1} · ${currentCycle.position+1}/${currentCycle.length}`;
+      } else if(!currentCycle && nextCycle){
+        kind = 'enter';
+        label = 'enters attractor';
+        note = `enters Cycle ${nextCycle.cycleIndex+1}`;
+      } else {
+        kind = 'transient';
+        label = 'transient';
+        note = info.cycleIndex >= 0
+          ? `${info.steps} step${info.steps===1?'':'s'} to Cycle ${info.cycleIndex+1}`
+          : 'toward attractor';
+      }
+
+      const currentTags = currentCycle
+        ? `<span class="pill">Cycle ${currentCycle.cycleIndex+1}</span><span class="pill">position ${currentCycle.position+1}/${currentCycle.length}</span>`
+        : `<span class="pill">${info.steps} step${info.steps===1?'':'s'} from attractor</span>`;
+
+      const nextTags = nextCycle
+        ? `<span class="pill">Cycle ${nextCycle.cycleIndex+1}</span>`
+        : `<span class="pill">transient state</span>`;
+
+      const flowVisual = kind === 'self'
+        ? `<div class="transition-arrow">${arrow}</div>`
+        : `<div class="flow-line"></div>`;
+
       return `<div class="transition-item ${r.state===selected?'sel':''}">
         <div class="transition-side">
           <div class="cap">Current</div>
           <div class="main">${r.state}</div>
           <div class="sub">RMT ${r.rmtText}</div>
           <div class="transition-meta">
-            <span class="pill">binary state</span>
-            ${inCycle ? '<span class="pill">in attractor cycle</span>' : ''}
+            ${currentTags}
           </div>
         </div>
-        <div class="transition-arrow">→</div>
+
+        <div class="flow-col flow-${kind}">
+          <div class="flow-label">${label}</div>
+          ${flowVisual}
+          <div class="flow-note">${note}</div>
+        </div>
+
         <div class="transition-side">
           <div class="cap">Next</div>
           <div class="main">${r.next}</div>
           <div class="sub">RMT ${r.nextRmtText}</div>
           <div class="transition-meta">
-            <span class="pill">next state</span>
-            ${feedsCycle ? '<span class="pill">leads toward / inside cycle</span>' : ''}
+            ${nextTags}
             <button class="mini-btn" data-state="${r.state}">Inspect</button>
           </div>
         </div>
       </div>`;
     }).join('');
-    container.querySelectorAll('button[data-state]').forEach(b=>b.addEventListener('click',()=>selectState(b.dataset.state)));
+
+    container.querySelectorAll('button[data-state]').forEach(b=>{
+      b.addEventListener('click',()=>selectState(b.dataset.state));
+    });
   }
 
   function updateViewMode(){
@@ -544,7 +689,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 
   function selectState(s){
     if(!model.byState.has(s))return;
-    selected=s; picker.value=s; renderGraph();renderInspector();renderTable();renderTransitionList();
+    selected=s; picker.value=s; renderGraph();renderInspector();renderTable();renderCycleOverview();renderTransitionList();
   }
 
   function resetSimulation(){
@@ -680,9 +825,31 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
       tx += drawTag(tx, y0 + 86, 'binary state', border) + 8;
       if (inCycle) drawTag(tx, y0 + 86, 'in attractor cycle', good);
 
-      ctx.fillStyle = accent;
+      const info = attractorInfo(r.state);
+      let arrowText = '→';
+      let arrowColor = accent;
+      let arrowLabel = 'TRANSIENT';
+      if(r.state === r.next){
+        arrowText = '↻';
+        arrowColor = good;
+        arrowLabel = 'SELF-LOOP';
+      } else if(inCycle && nextInCycle){
+        arrowColor = good;
+        arrowLabel = 'CYCLE STEP';
+      } else if(!inCycle && nextInCycle){
+        arrowColor = accent2;
+        arrowLabel = 'ENTERS CYCLE';
+      } else if(info.cycleIndex >= 0){
+        arrowLabel = `${info.steps} STEP${info.steps===1?'':'S'} TO CYCLE ${info.cycleIndex+1}`;
+      }
+
+      ctx.fillStyle = muted;
+      ctx.font = '700 9px Inter, Arial, sans-serif';
+      const labelWidth = ctx.measureText(arrowLabel).width;
+      ctx.fillText(arrowLabel, x0 + cardW + (arrowW-labelWidth)/2, y0 + 32);
+      ctx.fillStyle = arrowColor;
       ctx.font = '800 34px Inter, Arial, sans-serif';
-      ctx.fillText('→', x0 + cardW + 18, y0 + 62);
+      ctx.fillText(arrowText, x0 + cardW + 18, y0 + 70);
 
       const rx = x0 + cardW + arrowW;
       roundedRect(ctx, rx, y0, cardW, cardH, 18);
@@ -776,7 +943,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   }
 
   function renderAll(){
-    renderKPIs();renderPickers();renderCycles();renderRuleTables();renderInspector();renderGraph();renderTransitionList();renderTable();updateViewMode();resetSimulation();
+    renderKPIs();renderPickers();renderCycles();renderRuleTables();renderInspector();renderGraph();renderCycleOverview();renderTransitionList();renderTable();updateViewMode();resetSimulation();
   }
 
   function rebuild(){
