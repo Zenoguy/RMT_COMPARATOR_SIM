@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RMT Transition Explorer</title>
+<style>
+:root{
+  --bg:#08111f;
+  --panel:#0e1a2d;
+  --panel2:#101f36;
+  --card:#12243d;
+  --text:#eef5ff;
+  --muted:#93a8c4;
+  --border:#223957;
+  --accent:#72e1ff;
+  --accent2:#9f8cff;
+  --good:#60e6a8;
+  --warn:#ffca6a;
+  --danger:#ff7e91;
+  --shadow:0 18px 60px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  background:
+    radial-gradient(circle at 15% 0%,rgba(114,225,255,.12),transparent 28%),
+    radial-gradient(circle at 90% 10%,rgba(159,140,255,.12),transparent 30%),
+    linear-gradient(180deg,#07101d,#0a1423 45%,#08111f);
+  color:var(--text);
+  min-height:100vh;
+}
+body.light{
+  --bg:#f6f9fd;
+  --panel:#ffffff;
+  --panel2:#f4f8fc;
+  --card:#ffffff;
+  --text:#13243a;
+  --muted:#60748e;
+  --border:#d7e1ec;
+  --accent:#1177c7;
+  --accent2:#6d57d8;
+  --good:#14865c;
+  --warn:#a76a00;
+  --danger:#c73f58;
+  --shadow:0 18px 50px rgba(31,56,86,.12);
+  background:linear-gradient(180deg,#f9fbfe,#eef4fa);
+}
+.app{max-width:1500px;margin:0 auto;padding:24px}
+.hero{
+  display:grid;grid-template-columns:1.35fr .65fr;gap:18px;align-items:stretch;
+  margin-bottom:18px
+}
+.hero-main,.hero-side,.panel{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 94%,white 6%),var(--panel));
+  border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow)
+}
+.hero-main{padding:28px;position:relative;overflow:hidden}
+.hero-main:after{
+  content:"";position:absolute;right:-80px;top:-120px;width:330px;height:330px;
+  border-radius:50%;background:radial-gradient(circle,rgba(114,225,255,.16),transparent 66%);
+  pointer-events:none
+}
+.eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:800}
+h1{margin:8px 0 8px;font-size:clamp(34px,5vw,62px);line-height:.98;letter-spacing:-.04em}
+.subtitle{margin:0;max-width:800px;color:var(--muted);font-size:16px;line-height:1.65}
+.hero-side{padding:22px;display:flex;flex-direction:column;justify-content:space-between}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kpi{background:var(--panel2);border:1px solid var(--border);border-radius:16px;padding:14px}
+.kpi .n{font-size:24px;font-weight:800;margin-top:4px}
+.kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.top-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:14px}
+button,select,input{
+  font:inherit;color:inherit
+}
+button{
+  border:1px solid var(--border);background:var(--panel2);border-radius:12px;
+  padding:10px 14px;cursor:pointer;transition:.18s ease;min-height:42px
+}
+button:hover{transform:translateY(-1px);border-color:var(--accent)}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06111e;border:none;font-weight:800}
+button.ghost{background:transparent}
+.control-grid{
+  display:grid;grid-template-columns:2fr .55fr .55fr auto;gap:12px;align-items:end;
+  padding:18px;margin-bottom:18px
+}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px;font-weight:700;letter-spacing:.04em}
+input,select{
+  width:100%;border:1px solid var(--border);background:var(--panel2);
+  border-radius:12px;padding:12px 13px;outline:none;min-height:44px
+}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.hint{font-size:12px;color:var(--muted);margin-top:7px}
+.error{color:var(--danger);font-size:13px;margin-top:8px;min-height:18px}
+.layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.65fr);gap:18px}
+.panel{padding:18px;min-width:0}
+.panel h2{margin:0;font-size:17px;letter-spacing:-.01em}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.panel-sub{color:var(--muted);font-size:12px;margin-top:4px}
+.graph-wrap{
+  width:100%;overflow:auto;border-radius:18px;border:1px solid var(--border);
+  background:
+    linear-gradient(rgba(255,255,255,.015),rgba(255,255,255,.015)),
+    radial-gradient(circle at center,rgba(114,225,255,.045),transparent 55%),
+    var(--panel2)
+}
+svg{display:block;width:100%;min-width:720px;height:auto}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:10px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.inspector{
+  background:var(--panel2);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px
+}
+.state-big{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;font-weight:800;letter-spacing:.06em}
+.rmt-big{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent);font-size:18px;margin-top:2px}
+.arrow-line{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:12px;color:var(--muted)}
+.cell-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.cell-card{
+  border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--card)
+}
+.cell-card .tiny{font-size:11px;color:var(--muted)}
+.cell-card .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:3px}
+.cycle-list{display:grid;gap:9px;max-height:280px;overflow:auto;padding-right:4px}
+.cycle{
+  border:1px solid var(--border);border-radius:14px;padding:10px;background:var(--panel2)
+}
+.cycle strong{font-size:12px}
+.cycle code{display:block;margin-top:5px;color:var(--muted);font-size:11px;white-space:normal;word-break:break-word}
+.table-panel{margin-top:18px}
+.table-wrap{overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:16px}
+table{width:100%;border-collapse:collapse;min-width:620px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:13px}
+th{position:sticky;top:0;background:var(--panel);z-index:2;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+td.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+tr:hover td{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.mini-btn{padding:6px 9px;min-height:auto;border-radius:9px;font-size:12px}
+.rule-strip{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:10px}
+.bit{padding:7px 4px;text-align:center;border:1px solid var(--border);border-radius:10px;background:var(--panel2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.bit span{display:block;color:var(--muted);font-size:10px}
+.bit b{font-size:14px}
+.sim-row{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:end}
+.timeline{display:flex;gap:8px;overflow:auto;padding:10px 2px 2px}
+.step{
+  min-width:88px;border:1px solid var(--border);background:var(--panel2);border-radius:12px;padding:9px
+}
+.step .s{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:800}
+.step .r{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);font-size:10px;margin-top:3px}
+.footer{color:var(--muted);font-size:12px;text-align:center;padding:18px 0 4px}
+@media(max-width:980px){
+  .hero,.layout{grid-template-columns:1fr}
+  .control-grid{grid-template-columns:1fr 1fr}
+  .control-grid .field:first-child{grid-column:1/-1}
+  .kpis{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:600px){
+  .app{padding:12px}
+  .hero-main,.hero-side,.panel{border-radius:18px}
+  .control-grid{grid-template-columns:1fr;padding:14px}
+  .kpis{grid-template-columns:1fr}
+  .cell-grid{grid-template-columns:1fr}
+  .sim-row{grid-template-columns:1fr 1fr}
+  h1{font-size:38px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="hero">
+    <div class="hero-main">
+      <div class="eyebrow">Hybrid Cellular Automata</div>
+      <h1>RMT Transition Explorer</h1>
+      <p class="subtitle">Enter one elementary CA rule per cell, generate every state, inspect each RMT neighborhood, trace transitions, and reveal attractor cycles in the full state-transition graph.</p>
+    </div>
+    <div class="hero-side">
+      <div class="top-actions">
+        <button id="themeBtn" class="ghost">Toggle theme</button>
+        <button id="svgBtn">Export graph SVG</button>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Cells</div><div class="n" id="kCells">4</div></div>
+        <div class="kpi"><div class="l">States</div><div class="n" id="kStates">16</div></div>
+        <div class="kpi"><div class="l">Cycles</div><div class="n" id="kCycles">0</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel control-grid">
+    <div class="field">
+      <label>Rules (one per cell)</label>
+      <input id="rules" value="150 120 150 90" aria-label="Rules">
+      <div class="hint">Examples: 150 120 150 90 · 90 90 90 90 · 30 90 120 150</div>
+      <div class="error" id="err"></div>
+    </div>
+    <div class="field">
+      <label>Boundary</label>
+      <select id="boundary">
+        <option value="0" selected>Fixed 0</option>
+        <option value="1">Fixed 1</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Labels</label>
+      <select id="labels">
+        <option value="both" selected>State + RMT</option>
+        <option value="state">State only</option>
+        <option value="rmt">RMT only</option>
+      </select>
+    </div>
+    <button class="primary" id="build">Build transitions</button>
+  </section>
+
+  <section class="layout">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Transition graph</h2>
+          <div class="panel-sub">Tap any node to inspect how its next state is produced.</div>
+        </div>
+        <select id="statePicker" style="width:auto;min-width:180px"></select>
+      </div>
+      <div class="graph-wrap">
+        <svg id="graph" viewBox="0 0 1000 660" role="img" aria-label="RMT transition graph"></svg>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--accent)"></i>Selected state</span>
+        <span><i class="dot" style="background:var(--good)"></i>Attractor cycle</span>
+        <span><i class="dot" style="background:var(--accent2)"></i>Next state</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="panel-head"><div><h2>State inspector</h2><div class="panel-sub">Position-wise rule application</div></div></div>
+        <div class="inspector">
+          <div class="state-big" id="iState">0000</div>
+          <div class="rmt-big" id="iRmt">RMT 0000</div>
+          <div class="arrow-line" id="iArrow">0000 → 0000</div>
+          <div class="cell-grid" id="cellGrid"></div>
+        </div>
+        <div id="ruleTables"></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px">
+        <div class="panel-head"><div><h2>Attractor cycles</h2><div class="panel-sub">Closed loops in the state space</div></div></div>
+        <div class="cycle-list" id="cycles"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="panel-head">
+      <div>
+        <h2>Simulation path</h2>
+        <div class="panel-sub">Start from any state and step through its evolution.</div>
+      </div>
+    </div>
+    <div class="sim-row">
+      <div class="field"><label>Initial state</label><select id="simStart"></select></div>
+      <button id="stepBtn">Step</button>
+      <button id="playBtn">Auto play</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="panel-head">
+      <div>
+        <h2>Full transition table</h2>
+        <div class="panel-sub">Every possible state for the selected hybrid rule vector.</div>
+      </div>
+      <button id="csvBtn">Export CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>State</th><th>RMT</th><th>Next state</th><th>Next RMT</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="footer">RMT = Rule Minterm Transition · Fixed-boundary hybrid elementary cellular automata</div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const rulesEl=$('rules'), boundaryEl=$('boundary'), labelsEl=$('labels'), err=$('err');
+  const graph=$('graph'), tbody=$('tbody'), picker=$('statePicker'), cyclesEl=$('cycles');
+  const simStart=$('simStart'), timeline=$('timeline');
+  let model=null, selected=null, simCurrent=null, simSteps=[], timer=null;
+
+  function ruleBit(rule,rmt){ return (rule >> rmt) & 1; }
+  function rmtSeq(state,boundary){
+    const bits=state.split('').map(Number), p=[boundary,...bits,boundary], out=[];
+    for(let i=0;i<bits.length;i++) out.push(4*p[i]+2*p[i+1]+p[i+2]);
+    return out;
+  }
+  function nextState(state,rules,boundary){
+    const r=rmtSeq(state,boundary);
+    return r.map((x,i)=>String(ruleBit(rules[i],x))).join('');
+  }
+  function pad(n,w){ return n.toString(2).padStart(w,'0'); }
+
+  function parseRules(){
+    const parts=rulesEl.value.trim().replace(/,/g,' ').split(/\s+/).filter(Boolean);
+    if(!parts.length) throw new Error('Enter at least one rule.');
+    if(parts.length>7) throw new Error('For readability, this shared visualizer supports up to 7 cells (128 states).');
+    const rules=parts.map(Number);
+    if(rules.some(x=>!Number.isInteger(x)||x<0||x>255)) throw new Error('Every rule must be an integer from 0 to 255.');
+    return rules;
+  }
+
+  function findCycles(rows){
+    const next=new Map(rows.map(r=>[r.state,r.next]));
+    const done=new Set(), cycles=[];
+    for(const row of rows){
+      if(done.has(row.state)) continue;
+      const path=[], pos=new Map(); let cur=row.state;
+      while(!pos.has(cur)&&!done.has(cur)){ pos.set(cur,path.length); path.push(cur); cur=next.get(cur); }
+      if(pos.has(cur)) cycles.push(path.slice(pos.get(cur)));
+      path.forEach(x=>done.add(x));
+    }
+    return cycles;
+  }
+
+  function buildModel(){
+    const rules=parseRules(), boundary=Number(boundaryEl.value), n=rules.length, rows=[];
+    for(let i=0;i<2**n;i++){
+      const state=pad(i,n), rmts=rmtSeq(state,boundary), next=nextState(state,rules,boundary), nextRmts=rmtSeq(next,boundary);
+      rows.push({state,rmts,rmtText:rmts.join(''),next,nextRmts,nextRmtText:nextRmts.join('')});
+    }
+    const byState=new Map(rows.map(r=>[r.state,r]));
+    return {rules,boundary,n,rows,byState,cycles:findCycles(rows)};
+  }
+
+  function cycleSet(){ const s=new Set(); model.cycles.forEach(c=>c.forEach(x=>s.add(x))); return s; }
+
+  function renderKPIs(){
+    $('kCells').textContent=model.n;
+    $('kStates').textContent=model.rows.length;
+    $('kCycles').textContent=model.cycles.length;
+  }
+
+  function renderPickers(){
+    const opts=model.rows.map(r=>`<option value="${r.state}">${r.state} · RMT ${r.rmtText}</option>`).join('');
+    picker.innerHTML=opts; simStart.innerHTML=opts;
+    if(!selected||!model.byState.has(selected)) selected=model.rows[0].state;
+    picker.value=selected; simStart.value=selected;
+  }
+
+  function renderCycles(){
+    cyclesEl.innerHTML=model.cycles.map((c,i)=>`<div class="cycle"><strong>Cycle ${i+1} · length ${c.length}</strong><code>${[...c,c[0]].join(' → ')}</code></div>`).join('') || '<div class="cycle">No cycles found.</div>';
+  }
+
+  function renderRuleTables(){
+    const seen=[...new Set(model.rules)];
+    $('ruleTables').innerHTML=seen.map(rule=>{
+      const bits=[7,6,5,4,3,2,1,0].map(r=>`<div class="bit"><span>${r}</span><b>${ruleBit(rule,r)}</b></div>`).join('');
+      return `<div style="margin-top:12px"><div style="font-size:12px;color:var(--muted)">Rule ${rule} · ${rule.toString(2).padStart(8,'0')}</div><div class="rule-strip">${bits}</div></div>`;
+    }).join('');
+  }
+
+  function renderInspector(){
+    const row=model.byState.get(selected); if(!row) return;
+    $('iState').textContent=row.state;
+    $('iRmt').textContent='RMT '+row.rmtText;
+    $('iArrow').textContent=`${row.state} → ${row.next}   |   ${row.rmtText} → ${row.nextRmtText}`;
+    $('cellGrid').innerHTML=row.rmts.map((r,i)=>{
+      const trip=r.toString(2).padStart(3,'0'), out=ruleBit(model.rules[i],r);
+      return `<div class="cell-card"><div class="tiny">Cell ${i+1} · Rule ${model.rules[i]}</div><div class="mono">${trip} → RMT ${r}</div><div class="mono">f(${r}) = <b>${out}</b></div></div>`;
+    }).join('');
+  }
+
+  function layoutPositions(){
+    const rows=model.rows, W=1000,H=660,cx=W/2,cy=H/2, cset=cycleSet(), pos=new Map();
+    const cyc=rows.filter(r=>cset.has(r.state)), other=rows.filter(r=>!cset.has(r.state));
+    const rings=[];
+    if(other.length<=24) rings.push(other);
+    else if(other.length<=64){ rings.push(other.slice(0,Math.ceil(other.length/2)),other.slice(Math.ceil(other.length/2))); }
+    else {
+      const size=Math.ceil(other.length/3);
+      rings.push(other.slice(0,size),other.slice(size,size*2),other.slice(size*2));
+    }
+    const innerR=Math.min(170,70+cyc.length*5);
+    cyc.forEach((r,i)=>{ const a=-Math.PI/2+i*2*Math.PI/Math.max(1,cyc.length); pos.set(r.state,{x:cx+Math.cos(a)*innerR,y:cy+Math.sin(a)*innerR});});
+    const radii=rings.length===1?[265]:rings.length===2?[230,290]:[210,260,305];
+    rings.forEach((ring,ri)=>ring.forEach((r,i)=>{
+      const a=-Math.PI/2+i*2*Math.PI/Math.max(1,ring.length)+(ri*.13);
+      pos.set(r.state,{x:cx+Math.cos(a)*radii[ri],y:cy+Math.sin(a)*radii[ri]});
+    }));
+    return pos;
+  }
+
+  function svgEl(name,attrs={}){
+    const e=document.createElementNS('http://www.w3.org/2000/svg',name);
+    Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));
+    return e;
+  }
+
+  function renderGraph(){
+    graph.replaceChildren();
+    const defs=svgEl('defs');
+    const marker=svgEl('marker',{id:'arrow',viewBox:'0 0 10 10',refX:'8.5',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'});
+    marker.appendChild(svgEl('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'})); defs.appendChild(marker); graph.appendChild(defs);
+    const pos=layoutPositions(), cset=cycleSet(), selRow=model.byState.get(selected), target=selRow.next;
+
+    model.rows.forEach(row=>{
+      const a=pos.get(row.state),b=pos.get(row.next); if(!a||!b)return;
+      let d;
+      if(row.state===row.next){
+        d=`M ${a.x+24} ${a.y-4} C ${a.x+78} ${a.y-72}, ${a.x-78} ${a.y-72}, ${a.x-24} ${a.y-4}`;
+      } else {
+        const dx=b.x-a.x,dy=b.y-a.y,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len;
+        const sx=a.x+ux*28,sy=a.y+uy*28,tx=b.x-ux*31,ty=b.y-uy*31;
+        const bend=Math.min(22,len*.08),mx=(sx+tx)/2-uy*bend,my=(sy+ty)/2+ux*bend;
+        d=`M ${sx} ${sy} Q ${mx} ${my} ${tx} ${ty}`;
+      }
+      const cyc=cset.has(row.state)&&cset.has(row.next), active=row.state===selected;
+      const p=svgEl('path',{d,fill:'none',stroke:active?'var(--accent)':cyc?'var(--good)':'var(--border)','stroke-width':active?'3':'1.35','marker-end':'url(#arrow)',opacity:active?'1':'.78'});
+      graph.appendChild(p);
+    });
+
+    model.rows.forEach(row=>{
+      const p=pos.get(row.state),g=svgEl('g',{transform:`translate(${p.x},${p.y})`,tabindex:'0',role:'button'});
+      g.style.cursor='pointer';
+      const isSel=row.state===selected,isTarget=row.state===target&&row.state!==selected,isCycle=cset.has(row.state);
+      const rect=svgEl('rect',{x:'-40',y:'-24',width:'80',height:'48',rx:'12',fill:'var(--panel)',stroke:isSel?'var(--accent)':isTarget?'var(--accent2)':isCycle?'var(--good)':'var(--border)','stroke-width':isSel?'3':'1.5'});
+      g.appendChild(rect);
+      const mode=labelsEl.value, lines=mode==='state'?[row.state]:mode==='rmt'?[row.rmtText]:[row.state,'RMT '+row.rmtText];
+      lines.forEach((line,i)=>{
+        const t=svgEl('text',{x:'0',y:lines.length===1?'4':i===0?'-4':'12','text-anchor':'middle',fill:'var(--text)','font-size':i===0?'11':'8.5','font-family':'ui-monospace,monospace'});
+        t.textContent=line;g.appendChild(t);
+      });
+      const choose=()=>selectState(row.state);
+      g.addEventListener('click',choose); g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose();}});
+      graph.appendChild(g);
+    });
+  }
+
+  function renderTable(){
+    tbody.innerHTML=model.rows.map(r=>`<tr class="${r.state===selected?'sel':''}"><td class="mono">${r.state}</td><td class="mono">${r.rmtText}</td><td class="mono">${r.next}</td><td class="mono">${r.nextRmtText}</td><td><button class="mini-btn" data-state="${r.state}">Inspect</button></td></tr>`).join('');
+    tbody.querySelectorAll('button[data-state]').forEach(b=>b.addEventListener('click',()=>selectState(b.dataset.state)));
+  }
+
+  function selectState(s){
+    if(!model.byState.has(s))return;
+    selected=s; picker.value=s; renderGraph();renderInspector();renderTable();
+  }
+
+  function resetSimulation(){
+    stopPlay();
+    simCurrent=simStart.value;
+    simSteps=[simCurrent];
+    renderTimeline();
+  }
+  function simStep(){
+    if(!simCurrent) resetSimulation();
+    simCurrent=model.byState.get(simCurrent).next;
+    simSteps.push(simCurrent);
+    if(simSteps.length>40) simSteps.shift();
+    renderTimeline();
+    selectState(simCurrent);
+  }
+  function renderTimeline(){
+    timeline.innerHTML=simSteps.map((s,i)=>{const r=model.byState.get(s);return `<div class="step"><div class="s">${s}</div><div class="r">RMT ${r.rmtText}</div><div class="r">step ${i}</div></div>`}).join('');
+    timeline.scrollLeft=timeline.scrollWidth;
+  }
+  function stopPlay(){ if(timer){clearInterval(timer);timer=null;$('playBtn').textContent='Auto play';} }
+  function togglePlay(){
+    if(timer){stopPlay();return;}
+    $('playBtn').textContent='Pause';
+    timer=setInterval(simStep,700);
+  }
+
+  function exportCSV(){
+    const header=['state','rmt','next_state','next_rmt'];
+    const lines=[header.join(',')];
+    model.rows.forEach(r=>lines.push([r.state,r.rmtText,r.next,r.nextRmtText].join(',')));
+    downloadBlob(lines.join('\n'),'rmt_transitions.csv','text/csv');
+  }
+  function exportSVG(){
+    const clone=graph.cloneNode(true);
+    clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    const style=document.createElementNS('http://www.w3.org/2000/svg','style');
+    style.textContent=`text{fill:#eef5ff}.node{} path{vector-effect:non-scaling-stroke}`;
+    clone.prepend(style);
+    downloadBlob(new XMLSerializer().serializeToString(clone),'rmt_transition_graph.svg','image/svg+xml');
+  }
+  function downloadBlob(content,name,type){
+    const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  function renderAll(){
+    renderKPIs();renderPickers();renderCycles();renderRuleTables();renderInspector();renderGraph();renderTable();resetSimulation();
+  }
+
+  function rebuild(){
+    try{
+      err.textContent='';model=buildModel();selected=model.rows[0].state;renderAll();
+    }catch(e){err.textContent=e.message||'Could not build transitions.';}
+  }
+
+  $('build').addEventListener('click',rebuild);
+  rulesEl.addEventListener('keydown',e=>{if(e.key==='Enter')rebuild();});
+  boundaryEl.addEventListener('change',rebuild);
+  labelsEl.addEventListener('change',()=>model&&renderGraph());
+  picker.addEventListener('change',()=>selectState(picker.value));
+  simStart.addEventListener('change',resetSimulation);
+  $('stepBtn').addEventListener('click',simStep);
+  $('playBtn').addEventListener('click',togglePlay);
+  $('resetBtn').addEventListener('click',resetSimulation);
+  $('csvBtn').addEventListener('click',exportCSV);
+  $('svgBtn').addEventListener('click',exportSVG);
+  $('themeBtn').addEventListener('click',()=>document.body.classList.toggle('light'));
+
+  rebuild();
+})();
+</script>
+</body>
+</html>
