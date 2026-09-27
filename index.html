@@ -100,13 +100,13 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-m
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .panel-sub{color:var(--muted);font-size:12px;margin-top:4px}
 .graph-wrap{
-  width:100%;overflow:auto;border-radius:18px;border:1px solid var(--border);
+  width:100%;overflow:auto;border-radius:18px;border:1px solid var(--border);min-height:760px;
   background:
     linear-gradient(rgba(255,255,255,.015),rgba(255,255,255,.015)),
     radial-gradient(circle at center,rgba(114,225,255,.045),transparent 55%),
     var(--panel2)
 }
-svg{display:block;width:100%;min-width:720px;height:auto}
+svg{display:block;width:100%;min-width:840px;height:auto}
 .legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:10px}
 .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
 .inspector{
@@ -221,7 +221,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
         <select id="statePicker" style="width:auto;min-width:180px"></select>
       </div>
       <div class="graph-wrap">
-        <svg id="graph" viewBox="0 0 1000 660" role="img" aria-label="RMT transition graph"></svg>
+        <svg id="graph" viewBox="0 0 1200 860" role="img" aria-label="RMT transition graph"></svg>
       </div>
       <div class="legend">
         <span><i class="dot" style="background:var(--accent)"></i>Selected state</span>
@@ -352,7 +352,17 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   }
 
   function renderCycles(){
-    cyclesEl.innerHTML=model.cycles.map((c,i)=>`<div class="cycle"><strong>Cycle ${i+1} · length ${c.length}</strong><code>${[...c,c[0]].join(' → ')}</code></div>`).join('') || '<div class="cycle">No cycles found.</div>';
+    cyclesEl.innerHTML = model.cycles.map((c,i)=>{
+      const states = [...c, c[0]];
+      const rmts = states.map(s => model.byState.get(s).rmtText);
+      return `<div class="cycle">
+        <strong>Cycle ${i+1} · length ${c.length}</strong>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">States</div>
+        <code>${states.join(' → ')}</code>
+        <div style="margin-top:8px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">RMTs</div>
+        <code>${rmts.join(' → ')}</code>
+      </div>`;
+    }).join('') || '<div class="cycle">No cycles found.</div>';
   }
 
   function renderRuleTables(){
@@ -375,20 +385,28 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   }
 
   function layoutPositions(){
-    const rows=model.rows, W=1000,H=660,cx=W/2,cy=H/2, cset=cycleSet(), pos=new Map();
+    const rows=model.rows, W=1200, H=860, cx=W/2, cy=H/2, cset=cycleSet(), pos=new Map();
     const cyc=rows.filter(r=>cset.has(r.state)), other=rows.filter(r=>!cset.has(r.state));
+
     const rings=[];
-    if(other.length<=24) rings.push(other);
-    else if(other.length<=64){ rings.push(other.slice(0,Math.ceil(other.length/2)),other.slice(Math.ceil(other.length/2))); }
-    else {
+    if(other.length<=20) rings.push(other);
+    else if(other.length<=56){
+      const split=Math.ceil(other.length/2);
+      rings.push(other.slice(0,split), other.slice(split));
+    } else {
       const size=Math.ceil(other.length/3);
-      rings.push(other.slice(0,size),other.slice(size,size*2),other.slice(size*2));
+      rings.push(other.slice(0,size), other.slice(size,size*2), other.slice(size*2));
     }
-    const innerR=Math.min(170,70+cyc.length*5);
-    cyc.forEach((r,i)=>{ const a=-Math.PI/2+i*2*Math.PI/Math.max(1,cyc.length); pos.set(r.state,{x:cx+Math.cos(a)*innerR,y:cy+Math.sin(a)*innerR});});
-    const radii=rings.length===1?[265]:rings.length===2?[230,290]:[210,260,305];
+
+    const innerR = Math.min(240, 120 + cyc.length * 7);
+    cyc.forEach((r,i)=>{
+      const a = -Math.PI/2 + i*2*Math.PI/Math.max(1,cyc.length);
+      pos.set(r.state,{x:cx+Math.cos(a)*innerR,y:cy+Math.sin(a)*innerR});
+    });
+
+    const radii = rings.length===1 ? [360] : rings.length===2 ? [320, 410] : [280, 370, 450];
     rings.forEach((ring,ri)=>ring.forEach((r,i)=>{
-      const a=-Math.PI/2+i*2*Math.PI/Math.max(1,ring.length)+(ri*.13);
+      const a = -Math.PI/2 + i*2*Math.PI/Math.max(1,ring.length) + (ri*0.12);
       pos.set(r.state,{x:cx+Math.cos(a)*radii[ri],y:cy+Math.sin(a)*radii[ri]});
     }));
     return pos;
@@ -482,12 +500,49 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
     downloadBlob(lines.join('\n'),'rmt_transitions.csv','text/csv');
   }
   function exportSVG(){
-    const clone=graph.cloneNode(true);
+    const clone = graph.cloneNode(true);
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    clone.setAttribute('width','1200');
+    clone.setAttribute('height','860');
+    clone.setAttribute('viewBox','0 0 1200 860');
+
+    const bgColor = getComputedStyle(document.body).getPropertyValue('--panel2').trim() || '#0f1c30';
+    const textColor = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#eef5ff';
+
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', '0');
+    bg.setAttribute('y', '0');
+    bg.setAttribute('width', '1200');
+    bg.setAttribute('height', '860');
+    bg.setAttribute('fill', bgColor);
+    clone.insertBefore(bg, clone.firstChild);
+
+    const origEls = [graph, ...graph.querySelectorAll('*')];
+    const cloneEls = [clone, ...clone.querySelectorAll('*')];
+
+    for(let i=0;i<Math.min(origEls.length, cloneEls.length);i++){
+      const orig = origEls[i];
+      const copy = cloneEls[i];
+      const cs = getComputedStyle(orig);
+
+      if(copy.tagName === 'text'){
+        copy.setAttribute('fill', cs.fill || textColor);
+        copy.setAttribute('font-family', cs.fontFamily || 'ui-monospace, monospace');
+        copy.setAttribute('font-size', cs.fontSize || '12px');
+      }
+      if(['path','rect','circle','ellipse','line','polyline','polygon'].includes(copy.tagName)){
+        if(cs.fill && cs.fill !== 'none') copy.setAttribute('fill', cs.fill);
+        if(cs.stroke && cs.stroke !== 'none') copy.setAttribute('stroke', cs.stroke);
+        if(cs.strokeWidth) copy.setAttribute('stroke-width', cs.strokeWidth);
+        if(cs.opacity) copy.setAttribute('opacity', cs.opacity);
+      }
+    }
+
     const style=document.createElementNS('http://www.w3.org/2000/svg','style');
-    style.textContent=`text{fill:#eef5ff}.node{} path{vector-effect:non-scaling-stroke}`;
-    clone.prepend(style);
-    downloadBlob(new XMLSerializer().serializeToString(clone),'rmt_transition_graph.svg','image/svg+xml');
+    style.textContent='text{dominant-baseline:middle} path{vector-effect:non-scaling-stroke}';
+    clone.insertBefore(style, clone.firstChild.nextSibling);
+
+    downloadBlob('<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone),'rmt_transition_graph.svg','image/svg+xml');
   }
   function downloadBlob(content,name,type){
     const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');
