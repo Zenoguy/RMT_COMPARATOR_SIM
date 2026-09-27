@@ -80,6 +80,7 @@ button{
   padding:10px 14px;cursor:pointer;transition:.18s ease;min-height:42px
 }
 button:hover{transform:translateY(-1px);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06111e;border:none;font-weight:800}
 button.ghost{background:transparent}
 .control-grid{
@@ -147,6 +148,13 @@ svg{display:block;width:100%;min-width:840px;height:auto}
 .cycle-return{display:flex;align-items:center;gap:5px;color:var(--good);font-size:11px;font-weight:800;white-space:nowrap}
 .list-legend{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 12px;color:var(--muted);font-size:11px}
 .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.list-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.list-page-info{font-size:12px;color:var(--muted)}
+.list-pager{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.list-pager select{width:auto;min-width:92px;padding:8px 10px;min-height:38px}
+.list-pager button{min-height:38px;padding:8px 12px}
+.graph-limit-note{font-size:18px;font-weight:800;fill:var(--text)}
+.graph-limit-sub{font-size:13px;fill:var(--muted)}
 .inspector{
   background:var(--panel2);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:14px
 }
@@ -207,7 +215,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 }
 </style>
 </head>
-<body>
+<body class="light">
 <div class="app">
   <section class="hero">
     <div class="hero-main">
@@ -263,13 +271,13 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <div class="view-switch">
-            <button id="graphViewBtn" class="view-btn active" type="button">Graph view</button>
-            <button id="listViewBtn" class="view-btn" type="button">Transition list view</button>
+            <button id="graphViewBtn" class="view-btn" type="button">Graph view</button>
+            <button id="listViewBtn" class="view-btn active" type="button">Transition list view</button>
           </div>
           <select id="statePicker" style="width:auto;min-width:180px"></select>
         </div>
       </div>
-      <div id="graphView">
+      <div id="graphView" class="hidden-view">
         <div class="graph-wrap">
           <svg id="graph" viewBox="0 0 1200 860" role="img" aria-label="RMT transition graph"></svg>
         </div>
@@ -279,12 +287,26 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
           <span><i class="dot" style="background:var(--accent2)"></i>Next state</span>
         </div>
       </div>
-      <div id="listView" class="hidden-view">
+      <div id="listView">
         <div id="cycleOverview" class="cycle-overview"></div>
         <div class="list-legend">
           <span><i class="status-dot" style="background:var(--good)"></i>Cycle step</span>
           <span><i class="status-dot" style="background:var(--accent2)"></i>Enters attractor</span>
           <span><i class="status-dot" style="background:var(--accent)"></i>Transient transition</span>
+        </div>
+        <div class="list-tools">
+          <div id="listPageInfo" class="list-page-info"></div>
+          <div class="list-pager">
+            <label style="font-size:12px;color:var(--muted)">Rows
+              <select id="listPageSize" aria-label="Rows per transition-list page">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+              </select>
+            </label>
+            <button id="listPrevBtn" type="button">Previous</button>
+            <button id="listNextBtn" type="button">Next</button>
+          </div>
         </div>
         <div class="transition-list-wrap">
           <div id="transitionList" class="transition-list"></div>
@@ -352,7 +374,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   const rulesEl=$('rules'), boundaryEl=$('boundary'), labelsEl=$('labels'), err=$('err');
   const graph=$('graph'), tbody=$('tbody'), picker=$('statePicker'), cyclesEl=$('cycles');
   const simStart=$('simStart'), timeline=$('timeline');
-  let model=null, selected=null, simCurrent=null, simSteps=[], timer=null, currentView='graph';
+  let model=null, selected=null, simCurrent=null, simSteps=[], timer=null, currentView='list', listPage=0, listPageSize=100;
 
   function ruleBit(rule,rmt){ return (rule >> rmt) & 1; }
   function rmtSeq(state,boundary){
@@ -369,7 +391,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   function parseRules(){
     const parts=rulesEl.value.trim().replace(/,/g,' ').split(/\s+/).filter(Boolean);
     if(!parts.length) throw new Error('Enter at least one rule.');
-    if(parts.length>7) throw new Error('For readability, this shared visualizer supports up to 7 cells (128 states).');
+    if(parts.length>12) throw new Error('This visualizer supports up to 12 cells (4096 states).');
     const rules=parts.map(Number);
     if(rules.some(x=>!Number.isInteger(x)||x<0||x>255)) throw new Error('Every rule must be an integer from 0 to 255.');
     return rules;
@@ -394,8 +416,50 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
       const state=pad(i,n), rmts=rmtSeq(state,boundary), next=nextState(state,rules,boundary), nextRmts=rmtSeq(next,boundary);
       rows.push({state,rmts,rmtText:rmts.join(''),next,nextRmts,nextRmtText:nextRmts.join('')});
     }
+
     const byState=new Map(rows.map(r=>[r.state,r]));
-    return {rules,boundary,n,rows,byState,cycles:findCycles(rows)};
+    const cycles=findCycles(rows);
+    const cycleMembership=new Map();
+
+    cycles.forEach((cycle,cycleIndex)=>{
+      cycle.forEach((state,position)=>{
+        cycleMembership.set(state,{cycleIndex,position,length:cycle.length});
+      });
+    });
+
+    const attractorMap=new Map();
+    cycleMembership.forEach((info,state)=>{
+      attractorMap.set(state,{...info,steps:0});
+    });
+
+    for(const row of rows){
+      if(attractorMap.has(row.state)) continue;
+
+      const path=[];
+      const seen=new Set();
+      let cur=row.state;
+
+      while(!attractorMap.has(cur) && !seen.has(cur)){
+        seen.add(cur);
+        path.push(cur);
+        cur=byState.get(cur).next;
+      }
+
+      const base=attractorMap.get(cur);
+      if(base){
+        for(let i=path.length-1;i>=0;i--){
+          const distance=path.length-i;
+          attractorMap.set(path[i],{
+            cycleIndex:base.cycleIndex,
+            position:base.position,
+            length:base.length,
+            steps:base.steps+distance
+          });
+        }
+      }
+    }
+
+    return {rules,boundary,n,rows,byState,cycles,cycleMembership,attractorMap};
   }
 
   function cycleSet(){ const s=new Set(); model.cycles.forEach(c=>c.forEach(x=>s.add(x))); return s; }
@@ -482,6 +546,35 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 
   function renderGraph(){
     graph.replaceChildren();
+
+    const svgBtn=$('svgBtn');
+    if(model.rows.length>256){
+      svgBtn.disabled=true;
+      svgBtn.title='Graph SVG export is available for CA sizes up to 8 cells (256 states).';
+      graph.setAttribute('viewBox','0 0 1200 320');
+
+      const panel=svgEl('rect',{x:'110',y:'58',width:'980',height:'204',rx:'24',fill:'var(--panel)',stroke:'var(--border)','stroke-width':'1.5'});
+      graph.appendChild(panel);
+
+      const t1=svgEl('text',{x:'600',y:'125','text-anchor':'middle',class:'graph-limit-note'});
+      t1.textContent=`Graph view paused for ${model.rows.length.toLocaleString()} states`;
+      graph.appendChild(t1);
+
+      const t2=svgEl('text',{x:'600',y:'165','text-anchor':'middle',class:'graph-limit-sub'});
+      t2.textContent='The full list, cycles, simulation and transition table still support all 12 cells.';
+      graph.appendChild(t2);
+
+      const t3=svgEl('text',{x:'600',y:'197','text-anchor':'middle',class:'graph-limit-sub'});
+      t3.textContent='Use 8 cells or fewer (≤256 states) to render the complete interactive graph.';
+      graph.appendChild(t3);
+
+      return;
+    }
+
+    svgBtn.disabled=false;
+    svgBtn.title='';
+    graph.setAttribute('viewBox','0 0 1200 860');
+
     const defs=svgEl('defs');
     const marker=svgEl('marker',{id:'arrow',viewBox:'0 0 10 10',refX:'8.5',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'});
     marker.appendChild(svgEl('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'})); defs.appendChild(marker); graph.appendChild(defs);
@@ -521,30 +614,11 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   }
 
   function buildCycleMembership(){
-    const membership = new Map();
-    model.cycles.forEach((cycle, cycleIndex)=>{
-      cycle.forEach((state, position)=>{
-        membership.set(state,{cycleIndex,position,length:cycle.length});
-      });
-    });
-    return membership;
+    return model.cycleMembership;
   }
 
   function attractorInfo(state){
-    const membership = buildCycleMembership();
-    if(membership.has(state)){
-      return {...membership.get(state),steps:0};
-    }
-    let cur = state;
-    let steps = 0;
-    const seen = new Set();
-    while(!membership.has(cur) && !seen.has(cur) && steps <= model.rows.length + 1){
-      seen.add(cur);
-      cur = model.byState.get(cur).next;
-      steps++;
-    }
-    const m = membership.get(cur);
-    return m ? {...m,steps} : {cycleIndex:-1,position:-1,length:0,steps};
+    return model.attractorMap.get(state) || {cycleIndex:-1,position:-1,length:0,steps:0};
   }
 
   function renderCycleOverview(){
@@ -588,13 +662,26 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
     const container = $('transitionList');
     const membership = buildCycleMembership();
 
-    container.innerHTML = model.rows.map(r => {
+    const totalPages=Math.max(1,Math.ceil(model.rows.length/listPageSize));
+    if(listPage>=totalPages) listPage=totalPages-1;
+    if(listPage<0) listPage=0;
+
+    const start=listPage*listPageSize;
+    const end=Math.min(model.rows.length,start+listPageSize);
+    const visibleRows=model.rows.slice(start,end);
+
+    $('listPageInfo').textContent=`Showing ${(start+1).toLocaleString()}–${end.toLocaleString()} of ${model.rows.length.toLocaleString()} transitions · Page ${listPage+1} of ${totalPages}`;
+    $('listPrevBtn').disabled=listPage===0;
+    $('listNextBtn').disabled=listPage>=totalPages-1;
+    $('listPageSize').value=String(listPageSize);
+
+    container.innerHTML = visibleRows.map(r => {
       const currentCycle = membership.get(r.state);
       const nextCycle = membership.get(r.next);
       const info = attractorInfo(r.state);
 
       let kind = 'transient';
-      let label = 'transition';
+      let label = 'path to cycle';
       let note = '';
       let arrow = '→';
 
@@ -613,7 +700,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
         note = `enters Cycle ${nextCycle.cycleIndex+1}`;
       } else {
         kind = 'transient';
-        label = 'transient';
+        label = 'path to cycle';
         note = info.cycleIndex >= 0
           ? `${info.steps} step${info.steps===1?'':'s'} to Cycle ${info.cycleIndex+1}`
           : 'toward attractor';
@@ -625,7 +712,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 
       const nextTags = nextCycle
         ? `<span class="pill">Cycle ${nextCycle.cycleIndex+1}</span>`
-        : `<span class="pill">transient state</span>`;
+        : `<span class="pill">pre-cycle state</span>`;
 
       const flowVisual = kind === 'self'
         ? `<div class="transition-arrow">${arrow}</div>`
@@ -636,9 +723,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
           <div class="cap">Current</div>
           <div class="main">${r.state}</div>
           <div class="sub">RMT ${r.rmtText}</div>
-          <div class="transition-meta">
-            ${currentTags}
-          </div>
+          <div class="transition-meta">${currentTags}</div>
         </div>
 
         <div class="flow-col flow-${kind}">
@@ -689,7 +774,11 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 
   function selectState(s){
     if(!model.byState.has(s))return;
-    selected=s; picker.value=s; renderGraph();renderInspector();renderTable();renderCycleOverview();renderTransitionList();
+    selected=s;
+    picker.value=s;
+    const index=model.rows.findIndex(r=>r.state===s);
+    if(index>=0) listPage=Math.floor(index/listPageSize);
+    renderGraph();renderInspector();renderTable();renderCycleOverview();renderTransitionList();
   }
 
   function resetSimulation(){
@@ -893,6 +982,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
     downloadBlob(lines.join('\n'),'rmt_transitions.csv','text/csv');
   }
   function exportSVG(){
+    if(model.rows.length>256) return;
     const clone = graph.cloneNode(true);
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
     clone.setAttribute('width','1200');
@@ -948,7 +1038,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 
   function rebuild(){
     try{
-      err.textContent='';model=buildModel();selected=model.rows[0].state;renderAll();
+      err.textContent='';model=buildModel();selected=model.rows[0].state;listPage=0;renderAll();
     }catch(e){err.textContent=e.message||'Could not build transitions.';}
   }
 
@@ -959,6 +1049,9 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
   picker.addEventListener('change',()=>selectState(picker.value));
   $('graphViewBtn').addEventListener('click',()=>{ currentView='graph'; updateViewMode(); });
   $('listViewBtn').addEventListener('click',()=>{ currentView='list'; updateViewMode(); });
+  $('listPrevBtn').addEventListener('click',()=>{ if(listPage>0){ listPage--; renderTransitionList(); } });
+  $('listNextBtn').addEventListener('click',()=>{ const pages=Math.ceil(model.rows.length/listPageSize); if(listPage<pages-1){ listPage++; renderTransitionList(); } });
+  $('listPageSize').addEventListener('change',()=>{ listPageSize=Number($('listPageSize').value)||100; listPage=0; renderTransitionList(); });
   simStart.addEventListener('change',resetSimulation);
   $('stepBtn').addEventListener('click',simStep);
   $('playBtn').addEventListener('click',togglePlay);
